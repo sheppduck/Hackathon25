@@ -1,0 +1,6 @@
+# Ignore generated sqlite databases
+/databases/
+
+# Ignore Python caches
+__pycache__/
+*.py[cod]
