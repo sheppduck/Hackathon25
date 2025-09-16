@@ -1,6 +1,5 @@
 import sqlite3
-
-import sqlite3
+import pandas as pd
 
 
 # Generate a New SQL Lite Table that Eliminates Non-Relevant Fields
@@ -48,26 +47,65 @@ def create_dynamic_view(db_path, view_name, base_table,):
         # Now you have a list of dictionaries where each dictionary represents a claim
         # with column names as keys and row values as values
         print(f"Converted {len(claims_dict_list)} claims to dictionaries")
-
-
-        # Group claims by BENE_ID
-        claims_by_bene_id = {}
+        # Remove duplicate CLM_IDs from the list
+        seen_clm_ids = set()
+        unique_claims = []
         
+        for claim_dict in claims_dict_list:
+            clm_id = claim_dict.get('CLM_ID')
+            if clm_id not in seen_clm_ids:
+                seen_clm_ids.add(clm_id)
+                unique_claims.append(claim_dict)
+        
+        claims_dict_list = unique_claims
+        print(f"After removing duplicates: {len(claims_dict_list)} unique claims")
+
+
+        claim_dates_array = []
         for claim in claims_dict_list:
-            bene_id = claim.get('BENE_ID')
-            
-            if bene_id not in claims_by_bene_id:
-                claims_by_bene_id[bene_id] = []
-            else:
-                claims_by_bene_id[bene_id].append(claim)
+            # Sort claims by CLM_FROM_DT
+            admission_date = pd.to_datetime(claim.get('CLM_ADMSN_DT'))
+            discharge_date = pd.to_datetime(claim.get('NCH_BENE_DSCHRG_DT'))
+            length_of_stay = int((discharge_date - admission_date).days)
+            if length_of_stay == 0:
+                length_of_stay = 1
+            claim['LENGTH_OF_STAY'] = length_of_stay
+            print(f"Claim ID: {claim.get('CLM_ID')}, Admission Date: {claim.get('CLM_ADMSN_DT')}, Discharge Date: {claim.get('NCH_BENE_DSCHRG_DT')}, Length of Stay: {length_of_stay}")
+            claim_dates_array.append({
+                'CLM_ID': claim.get('CLM_ID'),
+                'BENE_ID': claim.get('BENE_ID'),
+                'CLM_ADMSN_DT': claim.get('CLM_ADMSN_DT'),
+                'NCH_BENE_DSCHRG_DT': claim.get('NCH_BENE_DSCHRG_DT'),
+                'LENGTH_OF_STAY': length_of_stay
+            })
+
+        # Create new table for length of stay data
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS length_of_stay_by_CLM (
+            CLM_ID TEXT PRIMARY KEY,
+            BENE_ID TEXT,
+            CLM_ADMSN_DT TEXT,
+            NCH_BENE_DSCHRG_DT TEXT,
+            LENGTH_OF_STAY INTEGER
+            )
+        """)
         
+        # Insert data into the new table
+        cursor.executemany("""
+            INSERT OR REPLACE INTO length_of_stay_by_CLM 
+            (CLM_ID, BENE_ID, CLM_ADMSN_DT, NCH_BENE_DSCHRG_DT, LENGTH_OF_STAY)
+            VALUES (?, ?, ?, ?, ?)
+        """, [(d['CLM_ID'], d['BENE_ID'], d['CLM_ADMSN_DT'], 
+            d['NCH_BENE_DSCHRG_DT'], d['LENGTH_OF_STAY']) 
+            for d in claim_dates_array])
+        
+        print(f"Inserted {len(claim_dates_array)} records into length_of_stay_by_CLM table")
+
+        print(f"Processing Done")
+
+
         # Print summary of grouped claims
-        print(f"Grouped claims into {len(claims_by_bene_id)} unique BENE_IDs")
-        for bene_id, claims in claims_by_bene_id.items():
-            print(f"BENE_ID {bene_id}: {len(claims)} claims")
 
-
-        # Close the connection
         conn.commit()
         conn.close()
 
