@@ -30,9 +30,12 @@ def create_dynamic_view(db_path, view_name, base_table, definitions_table):
         cursor = conn.cursor()
 
         # Create the view
-        relevant_fields_sql = f"SELECT 'Variable Name', Relevant FROM {definitions_table} WHERE Relevant = 1"
+        relevant_fields_sql = f"SELECT Variable_Name, Relevant FROM {definitions_table}"
         cursor.execute(relevant_fields_sql)
         rows = cursor.fetchall()
+        mappings_Sql = "SELECT * FROM claim_definitions_code_mapping"
+        cursor.execute(mappings_Sql)
+        mappings = cursor.fetchall()
 
         print(f"View '{view_name}' created successfully.")
 
