@@ -16,6 +16,8 @@ def import_excel_to_sqlite(excel_file_path, sqlite_db_path, table_name=None):
         # Read the Excel file
         print(f"Reading Excel file: {excel_file_path}")
         df = pd.read_excel(excel_file_path)
+        df.columns = [col.replace(' ', '_') for col in df.columns]
+        df.columns = [col.strip() for col in df.columns]
         
         # Use filename as table name if not provided
         if table_name is None:
